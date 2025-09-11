@@ -207,17 +207,25 @@ func (l *LinuxFactory) Create(id string, config *configs.Config) (Container, err
 }
 
 func (l *LinuxFactory) Load(id string) (Container, error) {
+	fmt.Println("Linux factory load")
+	fmt.Printf("l.Root = %s, id = %s\n", l.Root, id)
 	if l.Root == "" {
 		return nil, errors.New("root not set")
 	}
+
+	fmt.Println("validate id")
 	// when load, we need to check id is valid or not.
 	if err := l.validateID(id); err != nil {
 		return nil, err
 	}
+
+	fmt.Println("secure join")
 	containerRoot, err := securejoin.SecureJoin(l.Root, id)
 	if err != nil {
 		return nil, err
 	}
+
+	fmt.Println("load state")
 	state, err := l.loadState(containerRoot)
 	if err != nil {
 		return nil, err
@@ -227,6 +235,8 @@ func (l *LinuxFactory) Load(id string) (Container, error) {
 		processStartTime: state.InitProcessStartTime,
 		fds:              state.ExternalDescriptors,
 	}
+
+	fmt.Println("new with paths")
 	cm, err := manager.NewWithPaths(state.Config.Cgroups, state.CgroupPaths)
 	if err != nil {
 		return nil, err
@@ -247,9 +257,12 @@ func (l *LinuxFactory) Load(id string) (Container, error) {
 		created:              state.Created,
 	}
 	c.state = &loadedState{c: c}
+	fmt.Printf("refresh load state: %d\n", c.state.status())
 	if err := c.refreshState(); err != nil {
 		return nil, err
 	}
+
+	fmt.Println("Linux factory load returns success")
 	return c, nil
 }
 
@@ -261,6 +274,7 @@ func (l *LinuxFactory) Type() string {
 // This is a low level implementation detail of the reexec and should not be consumed externally
 func (l *LinuxFactory) StartInitialization() (err error) {
 	// Get the INITPIPE.
+	fmt.Println("RUNC: Get the init pipe")
 	envInitPipe := os.Getenv("_LIBCONTAINER_INITPIPE")
 	pipefd, err := strconv.Atoi(envInitPipe)
 	if err != nil {
@@ -284,16 +298,21 @@ func (l *LinuxFactory) StartInitialization() (err error) {
 		}
 	}()
 
+	fmt.Println("RUNC: Only init processes have FIFOFD")
+
 	// Only init processes have FIFOFD.
 	fifofd := -1
 	envInitType := os.Getenv("_LIBCONTAINER_INITTYPE")
 	it := initType(envInitType)
+	fmt.Printf("RUNC: init type = %s\n", envInitType)
 	if it == initStandard {
 		envFifoFd := os.Getenv("_LIBCONTAINER_FIFOFD")
 		if fifofd, err = strconv.Atoi(envFifoFd); err != nil {
 			return fmt.Errorf("unable to convert _LIBCONTAINER_FIFOFD: %w", err)
 		}
 	}
+
+	fmt.Println("RUNC: _LIBCONTAINER_CONSOLE")
 
 	var consoleSocket *os.File
 	if envConsole := os.Getenv("_LIBCONTAINER_CONSOLE"); envConsole != "" {
@@ -305,17 +324,23 @@ func (l *LinuxFactory) StartInitialization() (err error) {
 		defer consoleSocket.Close()
 	}
 
+	fmt.Println("RUNC: _LIBCONTAINER_LOGPIPE")
+
 	logPipeFdStr := os.Getenv("_LIBCONTAINER_LOGPIPE")
 	logPipeFd, err := strconv.Atoi(logPipeFdStr)
 	if err != nil {
 		return fmt.Errorf("unable to convert _LIBCONTAINER_LOGPIPE: %w", err)
 	}
 
+	fmt.Println("RUNC: Get mount files (O_PATH).")
+
 	// Get mount files (O_PATH).
 	mountFds, err := parseMountFds()
 	if err != nil {
 		return err
 	}
+
+	fmt.Println("RUNC: clear the current process's environment")
 
 	// clear the current process's environment to clean any libcontainer
 	// specific env vars.
@@ -331,10 +356,14 @@ func (l *LinuxFactory) StartInitialization() (err error) {
 		}
 	}()
 
+	fmt.Println("RUNC: new Container init")
+
 	i, err := newContainerInit(it, pipe, consoleSocket, fifofd, logPipeFd, mountFds)
 	if err != nil {
 		return err
 	}
+
+	fmt.Println("Init new container")
 
 	// If Init succeeds, syscall.Exec will not return, hence none of the defers will be called.
 	return i.Init()

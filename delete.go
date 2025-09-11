@@ -45,14 +45,18 @@ status of "ubuntu01" as "stopped" the following will delete resources held for
 		},
 	},
 	Action: func(context *cli.Context) error {
+		fmt.Println("Runc delete command")
+
 		if err := checkArgs(context, 1, exactArgs); err != nil {
 			return err
 		}
 
+		fmt.Println("Get container")
 		id := context.Args().First()
 		force := context.Bool("force")
 		container, err := getContainer(context)
 		if err != nil {
+			fmt.Println("Get container returns error")
 			if errors.Is(err, libcontainer.ErrNotExist) {
 				// if there was an aborted start or something of the sort then the container's directory could exist but
 				// libcontainer does not see it because the state.json file inside that directory was never created.
@@ -66,10 +70,14 @@ status of "ubuntu01" as "stopped" the following will delete resources held for
 			}
 			return err
 		}
+		fmt.Println("container status")
 		s, err := container.Status()
 		if err != nil {
+			fmt.Println("container status return error")
 			return err
 		}
+
+		fmt.Println("kill container")
 		switch s {
 		case libcontainer.Stopped:
 			destroy(container)
@@ -81,6 +89,8 @@ status of "ubuntu01" as "stopped" the following will delete resources held for
 			}
 			return fmt.Errorf("cannot delete container %s that is not stopped: %s", id, s)
 		}
+
+		fmt.Println("delete command returns nil")
 
 		return nil
 	},

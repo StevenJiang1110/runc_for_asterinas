@@ -47,6 +47,8 @@ func (l *linuxStandardInit) getSessionRingParams() (string, uint32, uint32) {
 }
 
 func (l *linuxStandardInit) Init() error {
+	fmt.Printf("RUNC: linux Standart Init: Init\n")
+
 	if !l.config.Config.NoNewKeyring {
 		if err := selinux.SetKeyLabel(l.config.ProcessLabel); err != nil {
 			return err
@@ -77,15 +79,23 @@ func (l *linuxStandardInit) Init() error {
 		}
 	}
 
+	fmt.Printf("RUNC: linux Standart Init: SetupNetwork\n")
+
 	if err := setupNetwork(l.config); err != nil {
 		return err
 	}
+
+	fmt.Printf("RUNC: linux Standart Init: SetupRoute\n")
 	if err := setupRoute(l.config.Config); err != nil {
 		return err
 	}
 
+	fmt.Printf("RUNC: linux Standart Init: selinux getenabled\n")
+
 	// initialises the labeling system
 	selinux.GetEnabled()
+
+	fmt.Printf("RUNC: linux Standart Init: prepare rootfs\n")
 
 	// We don't need the mountFds after prepareRootfs() nor if it fails.
 	err := prepareRootfs(l.pipe, l.config, l.mountFds)
@@ -103,6 +113,8 @@ func (l *linuxStandardInit) Init() error {
 		return err
 	}
 
+	fmt.Printf("RUNC: linux Standart Init: create console\n")
+
 	// Set up the console. This has to be done *before* we finalize the rootfs,
 	// but *after* we've given the user the chance to set up all of the mounts
 	// they wanted.
@@ -115,6 +127,8 @@ func (l *linuxStandardInit) Init() error {
 		}
 	}
 
+	fmt.Printf("RUNC: linux Standart Init: finalize rootfs\n")
+
 	// Finish the rootfs setup.
 	if l.config.Config.Namespaces.Contains(configs.NEWNS) {
 		if err := finalizeRootfs(l.config.Config); err != nil {
@@ -122,11 +136,16 @@ func (l *linuxStandardInit) Init() error {
 		}
 	}
 
+	fmt.Printf("RUNC: linux Standart Init: set host name\n")
+
 	if hostname := l.config.Config.Hostname; hostname != "" {
 		if err := unix.Sethostname([]byte(hostname)); err != nil {
 			return &os.SyscallError{Syscall: "sethostname", Err: err}
 		}
 	}
+
+	fmt.Printf("RUNC: linux Standart Init: apply profile\n")
+
 	if err := apparmor.ApplyProfile(l.config.AppArmorProfile); err != nil {
 		return fmt.Errorf("unable to apply apparmor profile: %w", err)
 	}
@@ -136,6 +155,8 @@ func (l *linuxStandardInit) Init() error {
 			return err
 		}
 	}
+
+	fmt.Printf("RUNC: linux Standart Init: read only path\n")
 	for _, path := range l.config.Config.ReadonlyPaths {
 		if err := readonlyPath(path); err != nil {
 			return fmt.Errorf("can't make %q read-only: %w", path, err)
@@ -146,6 +167,9 @@ func (l *linuxStandardInit) Init() error {
 			return fmt.Errorf("can't mask path %s: %w", path, err)
 		}
 	}
+
+	fmt.Printf("RUNC: linux Standart Init: get parent death signal\n")
+
 	pdeath, err := system.GetParentDeathSignal()
 	if err != nil {
 		return fmt.Errorf("can't get pdeath signal: %w", err)
@@ -155,6 +179,8 @@ func (l *linuxStandardInit) Init() error {
 			return &os.SyscallError{Syscall: "prctl(SET_NO_NEW_PRIVS)", Err: err}
 		}
 	}
+
+	fmt.Printf("RUNC: linux Standart Init: sync parent ready\n")
 
 	// Tell our parent that we're ready to exec. This must be done before the
 	// Seccomp rules have been applied, because we need to be able to read and
@@ -179,9 +205,14 @@ func (l *linuxStandardInit) Init() error {
 			return err
 		}
 	}
+
+	fmt.Printf("RUNC: linux Standart Init: finalizeNamespace\n")
+
 	if err := finalizeNamespace(l.config); err != nil {
 		return err
 	}
+
+	fmt.Printf("RUNC: linux Standart Init: restore pdeath signal\n")
 	// finalizeNamespace can change user/group which clears the parent death
 	// signal, so we restore it here.
 	if err := pdeath.Restore(); err != nil {
@@ -191,6 +222,8 @@ func (l *linuxStandardInit) Init() error {
 	// sure that it did not change.  if the parent changes that means it died
 	// and we were reparented to something else so we should just kill ourself
 	// and not cause problems for someone else.
+
+	fmt.Printf("RUNC: linux Standart Init: try to kill ourself\n")
 	if unix.Getppid() != l.parentPid {
 		return unix.Kill(unix.Getpid(), unix.SIGKILL)
 	}
@@ -224,6 +257,9 @@ func (l *linuxStandardInit) Init() error {
 		}
 	}
 	// Close the pipe to signal that we have completed our init.
+
+	fmt.Println("RUNC: linux Standart Init: closing the pipe to signal completion")
+
 	logrus.Debugf("init: closing the pipe to signal completion")
 	_ = l.pipe.Close()
 
@@ -278,5 +314,7 @@ func (l *linuxStandardInit) Init() error {
 	if err := utils.UnsafeCloseFrom(l.config.PassedFilesCount + 3); err != nil {
 		return err
 	}
+
+	fmt.Printf("RUNC: execute %s\n", name)
 	return system.Exec(name, l.config.Args[0:], os.Environ())
 }

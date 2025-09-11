@@ -98,8 +98,10 @@ func parseSync(pipe io.Reader, fn func(*syncT) error) error {
 	dec := json.NewDecoder(pipe)
 	for {
 		var sync syncT
+		fmt.Println("RUNC: decode sync")
 		if err := dec.Decode(&sync); err != nil {
 			if errors.Is(err, io.EOF) {
+				fmt.Println("RUNC: parse sync returns")
 				break
 			}
 			return err
@@ -107,6 +109,8 @@ func parseSync(pipe io.Reader, fn func(*syncT) error) error {
 
 		// We handle this case outside fn for cleanliness reasons.
 		var ierr *initError
+
+		fmt.Printf("RUNC: sync type = %s\n", sync.Type)
 		if sync.Type == procError {
 			if err := dec.Decode(&ierr); err != nil && !errors.Is(err, io.EOF) {
 				return fmt.Errorf("error decoding proc error from init: %w", err)
@@ -118,9 +122,13 @@ func parseSync(pipe io.Reader, fn func(*syncT) error) error {
 			panic("No error following JSON procError payload.")
 		}
 
+		fmt.Println("RUNC: parse sync execute closure")
+
 		if err := fn(&sync); err != nil {
 			return err
 		}
+
+		fmt.Println("RUNC: parse sync execute closure returns")
 	}
 	return nil
 }

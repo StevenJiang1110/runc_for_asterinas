@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"net"
 	"os"
 	"path"
@@ -92,7 +93,9 @@ func notifySocketStart(context *cli.Context, notifySocketHost, id string) (*noti
 }
 
 func (n *notifySocket) waitForContainer(container libcontainer.Container) error {
+	fmt.Println("RUNC: inside wait for container")
 	s, err := container.State()
+	fmt.Printf("RUNC: init process pid = %d\n", s.InitProcessPid)
 	if err != nil {
 		return err
 	}
@@ -100,10 +103,12 @@ func (n *notifySocket) waitForContainer(container libcontainer.Container) error 
 }
 
 func (n *notifySocket) run(pid1 int) error {
+	fmt.Printf("RUNC: run init process pid\n")
 	if n.socket == nil {
 		return nil
 	}
 	notifySocketHostAddr := net.UnixAddr{Name: n.host, Net: "unixgram"}
+	fmt.Printf("RUNC: dial Unix: %s\n", notifySocketHostAddr.Name)
 	client, err := net.DialUnix("unixgram", nil, &notifySocketHostAddr)
 	if err != nil {
 		return err
@@ -111,6 +116,8 @@ func (n *notifySocket) run(pid1 int) error {
 
 	ticker := time.NewTicker(time.Millisecond * 100)
 	defer ticker.Stop()
+
+	fmt.Printf("RUNC: run fileChan\n")
 
 	fileChan := make(chan []byte)
 	go func() {
@@ -132,6 +139,8 @@ func (n *notifySocket) run(pid1 int) error {
 
 		}
 	}()
+
+	fmt.Printf("RUNC: for select\n")
 
 	for {
 		select {

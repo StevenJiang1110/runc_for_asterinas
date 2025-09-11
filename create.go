@@ -53,15 +53,19 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 		},
 	},
 	Action: func(context *cli.Context) error {
+		fmt.Println("RUNC: create command")
 		if err := checkArgs(context, 1, exactArgs); err != nil {
 			return err
 		}
+		fmt.Println("RUNC: create command: start container")
 		status, err := startContainer(context, CT_ACT_CREATE, nil)
 		if err == nil {
+			fmt.Println("RUNC: create command return success")
 			// exit with the container's exit status so any external supervisor
 			// is notified of the exit with the correct exit status.
 			os.Exit(status)
 		}
+		fmt.Println("RUNC: create command return failure")
 		return fmt.Errorf("runc create failed: %w", err)
 	},
 }

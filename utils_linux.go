@@ -53,14 +53,20 @@ func loadFactory(context *cli.Context) (libcontainer.Factory, error) {
 // getContainer returns the specified container instance by loading it from state
 // with the default factory.
 func getContainer(context *cli.Context) (libcontainer.Container, error) {
+	fmt.Println("get container")
 	id := context.Args().First()
+
+	fmt.Printf("id = %s\n", id)
 	if id == "" {
 		return nil, errEmptyID
 	}
+	fmt.Println("load factory")
 	factory, err := loadFactory(context)
 	if err != nil {
 		return nil, err
 	}
+
+	fmt.Println("factory load")
 	return factory.Load(id)
 }
 
@@ -233,6 +239,7 @@ type runner struct {
 }
 
 func (r *runner) run(config *specs.Process) (int, error) {
+	fmt.Println("RUNC: run specs process, runner.init = ")
 	var err error
 	defer func() {
 		if err != nil {
@@ -242,6 +249,8 @@ func (r *runner) run(config *specs.Process) (int, error) {
 	if err = r.checkTerminal(config); err != nil {
 		return -1, err
 	}
+
+	fmt.Println("RUNC: new process")
 	process, err := newProcess(*config)
 	if err != nil {
 		return -1, err
@@ -281,6 +290,7 @@ func (r *runner) run(config *specs.Process) (int, error) {
 	}
 	defer tty.Close()
 
+	fmt.Printf("RUNC: r.action = %d\n", r.action)
 	switch r.action {
 	case CT_ACT_CREATE:
 		err = r.container.Start(process)
@@ -294,10 +304,14 @@ func (r *runner) run(config *specs.Process) (int, error) {
 	if err != nil {
 		return -1, err
 	}
+
+	fmt.Println("RUNC: wait console")
 	if err = tty.waitConsole(); err != nil {
 		r.terminate(process)
 		return -1, err
 	}
+
+	fmt.Println("RUNC: close post start")
 	tty.ClosePostStart()
 	if r.pidFile != "" {
 		if err = createPidFile(r.pidFile, process); err != nil {
@@ -305,6 +319,8 @@ func (r *runner) run(config *specs.Process) (int, error) {
 			return -1, err
 		}
 	}
+
+	fmt.Println("RUNC: handler forward")
 	status, err := handler.forward(process, tty, detach)
 	if err != nil {
 		r.terminate(process)
@@ -312,6 +328,8 @@ func (r *runner) run(config *specs.Process) (int, error) {
 	if detach {
 		return 0, nil
 	}
+
+	fmt.Println("RUNC: destroy")
 	if err == nil {
 		r.destroy()
 	}
@@ -387,10 +405,14 @@ func startContainer(context *cli.Context, action CtAct, criuOpts *libcontainer.C
 		notifySocket.setupSpec(spec)
 	}
 
+	fmt.Println("RUNC: create container")
+
 	container, err := createContainer(context, id, spec)
 	if err != nil {
 		return -1, err
 	}
+
+	fmt.Println("RUNC: bind socket")
 
 	if notifySocket != nil {
 		if err := notifySocket.setupSocketDirectory(); err != nil {

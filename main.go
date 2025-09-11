@@ -73,6 +73,9 @@ func main() {
 
 	xdgRuntimeDir := ""
 	root := "/run/runc"
+
+	fmt.Println("My Runc")
+
 	if shouldHonorXDGRuntimeDir() {
 		if runtimeDir := os.Getenv("XDG_RUNTIME_DIR"); runtimeDir != "" {
 			root = runtimeDir + "/runc"
@@ -135,6 +138,7 @@ func main() {
 		featuresCommand,
 	}
 	app.Before = func(context *cli.Context) error {
+		fmt.Println("Add before")
 		if !context.IsSet("root") && xdgRuntimeDir != "" {
 			// According to the XDG specification, we need to set anything in
 			// XDG_RUNTIME_DIR to have a sticky bit if we don't want it to get
@@ -148,9 +152,14 @@ func main() {
 				fatal(err)
 			}
 		}
+
+		fmt.Println("revise Root Dir")
+
 		if err := reviseRootDir(context); err != nil {
 			return err
 		}
+
+		fmt.Println("configLogrus")
 
 		return configLogrus(context)
 	}
@@ -177,7 +186,10 @@ func (f *FatalWriter) Write(p []byte) (n int, err error) {
 }
 
 func configLogrus(context *cli.Context) error {
+	fmt.Println("config logrus")
+
 	if context.GlobalBool("debug") {
+		fmt.Print("set debug log level")
 		logrus.SetLevel(logrus.DebugLevel)
 		logrus.SetReportCaller(true)
 		// Shorten function and file names reported by the logger, by
@@ -194,6 +206,8 @@ func configLogrus(context *cli.Context) error {
 		})
 	}
 
+	fmt.Println("log format")
+
 	switch f := context.GlobalString("log-format"); f {
 	case "":
 		// do nothing
@@ -205,6 +219,8 @@ func configLogrus(context *cli.Context) error {
 		return errors.New("invalid log-format: " + f)
 	}
 
+	fmt.Println("log global string")
+
 	if file := context.GlobalString("log"); file != "" {
 		f, err := os.OpenFile(file, os.O_CREATE|os.O_WRONLY|os.O_APPEND|os.O_SYNC, 0o644)
 		if err != nil {
@@ -212,6 +228,8 @@ func configLogrus(context *cli.Context) error {
 		}
 		logrus.SetOutput(f)
 	}
+
+	fmt.Println("config logrus returns nil")
 
 	return nil
 }

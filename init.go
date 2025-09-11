@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"runtime"
 	"strconv"
@@ -12,6 +13,7 @@ import (
 
 func init() {
 	if len(os.Args) > 1 && os.Args[1] == "init" {
+		fmt.Println("RUNC: runc init")
 		// This is the golang entry point for runc init, executed
 		// before main() but after libcontainer/nsenter's nsexec().
 		runtime.GOMAXPROCS(1)
@@ -33,6 +35,7 @@ func init() {
 		logrus.Debug("child process in init()")
 
 		factory, _ := libcontainer.New("")
+		fmt.Println("RUNC: before start initialization")
 		if err := factory.StartInitialization(); err != nil {
 			// as the error is sent back to the parent there is no need to log
 			// or write it to stderr because the parent process will handle this

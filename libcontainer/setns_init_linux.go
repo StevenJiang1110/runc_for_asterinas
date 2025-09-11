@@ -32,6 +32,8 @@ func (l *linuxSetnsInit) getSessionRingName() string {
 }
 
 func (l *linuxSetnsInit) Init() error {
+	fmt.Printf("RUNC: linuxSetnsInit Init")
+
 	if !l.config.Config.NoNewKeyring {
 		if err := selinux.SetKeyLabel(l.config.ProcessLabel); err != nil {
 			return err
@@ -49,6 +51,8 @@ func (l *linuxSetnsInit) Init() error {
 		}
 	}
 
+	fmt.Printf("RUNC: linuxSetnsInit Create console")
+
 	if l.config.CreateConsole {
 		if err := setupConsole(l.consoleSocket, l.config, false); err != nil {
 			return err
@@ -57,6 +61,8 @@ func (l *linuxSetnsInit) Init() error {
 			return err
 		}
 	}
+
+	fmt.Printf("RUNC: linuxSetnsInit no new privileges")
 	if l.config.NoNewPrivileges {
 		if err := unix.Prctl(unix.PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0); err != nil {
 			return err
@@ -121,6 +127,8 @@ func (l *linuxSetnsInit) Init() error {
 			return err
 		}
 	}
+
+	fmt.Printf("RUNC: linuxSetnsInit Init setns_init: about to exec")
 	logrus.Debugf("setns_init: about to exec")
 	// Close the log pipe fd so the parent's ForwardLogs can exit.
 	if err := unix.Close(l.logFd); err != nil {
