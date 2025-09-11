@@ -31,7 +31,7 @@ jobs:
         run: |
           sudo apt -q update
           sudo apt -qy install libseccomp-dev
-      - uses: golangci/golangci-lint-action@v6
+      - uses: golangci/golangci-lint-action@v8
         with:
           version: v1.57
       # Extra linters, only checking new code from a pull request.
