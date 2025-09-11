@@ -1,15 +1,15 @@
 module github.com/opencontainers/runc
 
-go 1.18
+go 1.23
 
 require (
 	github.com/checkpoint-restore/go-criu/v5 v5.3.0
 	github.com/cilium/ebpf v0.7.0
 	github.com/containerd/console v1.0.3
-	github.com/coreos/go-systemd/v22 v22.3.2
+	github.com/coreos/go-systemd/v22 v22.6.0
 	github.com/cyphar/filepath-securejoin v0.2.4
 	github.com/docker/go-units v0.4.0
-	github.com/godbus/dbus/v5 v5.0.6
+	github.com/godbus/dbus/v5 v5.1.0
 	github.com/moby/sys/mountinfo v0.5.0
 	github.com/mrunalp/fileutils v0.5.1
 	github.com/opencontainers/runtime-spec v1.0.3-0.20210326190908-1c3f411f0417
