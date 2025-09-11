@@ -218,7 +218,7 @@ func finalizeNamespace(config *initConfig) error {
 		return fmt.Errorf("unable to set keep caps: %w", err)
 	}
 	if err := setupUser(config); err != nil {
-		return fmt.Errorf("unable to setup user: %w", err)
+		// return fmt.Errorf("unable to setup user: %w", err)
 	}
 	// Change working directory AFTER the user has been set up, if we haven't done it yet.
 	if doChdir {
@@ -234,7 +234,7 @@ func finalizeNamespace(config *initConfig) error {
 		return fmt.Errorf("unable to clear keep caps: %w", err)
 	}
 	if err := w.ApplyCaps(); err != nil {
-		return fmt.Errorf("unable to apply caps: %w", err)
+		// return fmt.Errorf("unable to apply caps: %w", err)
 	}
 	return nil
 }

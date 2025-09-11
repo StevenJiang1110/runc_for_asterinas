@@ -125,6 +125,7 @@ func WithProcfd(root, unsafePath string, fn func(procfd string) error) error {
 	if realpath, err := os.Readlink(procfd); err != nil {
 		return fmt.Errorf("procfd verification failed: %w", err)
 	} else if realpath != path {
+		// fmt.Printf("realpath = %s, path = %s\n", realpath, path)
 		return fmt.Errorf("possibly malicious path detected -- refusing to operate on %s", realpath)
 	}
 

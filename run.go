@@ -66,9 +66,11 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 		},
 	},
 	Action: func(context *cli.Context) error {
+		fmt.Printf("Runc run command")
 		if err := checkArgs(context, 1, exactArgs); err != nil {
 			return err
 		}
+		fmt.Printf("start Container")
 		status, err := startContainer(context, CT_ACT_RUN, nil)
 		if err == nil {
 			// exit with the container's exit status so any external supervisor is

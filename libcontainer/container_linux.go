@@ -228,6 +228,7 @@ func (c *linuxContainer) Set(config configs.Config) error {
 }
 
 func (c *linuxContainer) Start(process *Process) error {
+	fmt.Println("RUNC: linuxContainer.Start")
 	c.m.Lock()
 	defer c.m.Unlock()
 	if c.config.Cgroups.Resources.SkipDevices {
@@ -238,20 +239,30 @@ func (c *linuxContainer) Start(process *Process) error {
 			return err
 		}
 	}
+
+	fmt.Println("RUNC: start linux container start process")
+
 	if err := c.start(process); err != nil {
+		fmt.Println("RUNC: start process returns error")
 		if process.Init {
 			c.deleteExecFifo()
 		}
 		return err
 	}
+
+	fmt.Println("RUNC: linuxContainer.Start returns success")
 	return nil
 }
 
 func (c *linuxContainer) Run(process *Process) error {
+	fmt.Println("linuxContainer.Run")
 	if err := c.Start(process); err != nil {
 		return err
 	}
+
+	fmt.Println("prepare exec container")
 	if process.Init {
+		fmt.Println("exec linux container")
 		return c.exec()
 	}
 	return nil
@@ -336,10 +347,13 @@ type openResult struct {
 }
 
 func (c *linuxContainer) start(process *Process) (retErr error) {
+	fmt.Println("RUNC: start linux container, new parent process")
 	parent, err := c.newParentProcess(process)
 	if err != nil {
 		return fmt.Errorf("unable to create new parent process: %w", err)
 	}
+
+	fmt.Println("RUNC: forward child logs")
 
 	logsDone := parent.forwardChildLogs()
 	if logsDone != nil {
@@ -353,6 +367,8 @@ func (c *linuxContainer) start(process *Process) (retErr error) {
 		}()
 	}
 
+	fmt.Println("RUNC: close exec from")
+
 	// Before starting "runc init", mark all non-stdio open files as O_CLOEXEC
 	// to make sure we don't leak any files into "runc init". Any files to be
 	// passed to "runc init" through ExtraFiles will get dup2'd by the Go
@@ -362,10 +378,13 @@ func (c *linuxContainer) start(process *Process) (retErr error) {
 	if err := utils.CloseExecFrom(3); err != nil {
 		return fmt.Errorf("unable to mark non-stdio fds as cloexec: %w", err)
 	}
+
+	fmt.Println("RUNC: parent start")
 	if err := parent.start(); err != nil {
 		return fmt.Errorf("unable to start container process: %w", err)
 	}
 
+	fmt.Println("RUNC: handle init process")
 	if process.Init {
 		c.fifo.Close()
 		if c.config.Hooks != nil {
@@ -465,6 +484,7 @@ func (c *linuxContainer) includeExecFifo(cmd *exec.Cmd) error {
 }
 
 func (c *linuxContainer) newParentProcess(p *Process) (parentProcess, error) {
+	fmt.Println("new Parent Process: create socket pair")
 	parentInitPipe, childInitPipe, err := utils.NewSockPair("init")
 	if err != nil {
 		return nil, fmt.Errorf("unable to create init pipe: %w", err)
@@ -479,6 +499,7 @@ func (c *linuxContainer) newParentProcess(p *Process) (parentProcess, error) {
 
 	cmd := c.commandTemplate(p, childInitPipe, childLogPipe)
 	if !p.Init {
+		fmt.Println("new setns process")
 		return c.newSetnsProcess(p, cmd, messageSockPair, logFilePair)
 	}
 
@@ -490,6 +511,8 @@ func (c *linuxContainer) newParentProcess(p *Process) (parentProcess, error) {
 	if err := c.includeExecFifo(cmd); err != nil {
 		return nil, fmt.Errorf("unable to setup exec fifo: %w", err)
 	}
+
+	fmt.Println("new init process")
 	return c.newInitProcess(p, cmd, messageSockPair, logFilePair)
 }
 
@@ -574,6 +597,7 @@ func (c *linuxContainer) newInitProcess(p *Process, cmd *exec.Cmd, messageSockPa
 	}
 
 	if c.shouldSendMountSources() {
+		fmt.Printf("should send mount sources\n")
 		// Elements on this slice will be paired with mounts (see StartInitialization() and
 		// prepareRootfs()). This slice MUST have the same size as c.config.Mounts.
 		mountFds := make([]int, len(c.config.Mounts))
@@ -602,6 +626,7 @@ func (c *linuxContainer) newInitProcess(p *Process, cmd *exec.Cmd, messageSockPa
 		)
 	}
 
+	fmt.Println("init process with message socket pair")
 	init := &initProcess{
 		cmd:             cmd,
 		messageSockPair: messageSockPair,
@@ -1959,10 +1984,12 @@ func (c *linuxContainer) refreshState() error {
 	t := c.runType()
 	switch t {
 	case Created:
+		fmt.Println("transition to created state")
 		return c.state.transition(&createdState{c: c})
 	case Running:
 		return c.state.transition(&runningState{c: c})
 	}
+	fmt.Println("transition to stopped state")
 	return c.state.transition(&stoppedState{c: c})
 }
 

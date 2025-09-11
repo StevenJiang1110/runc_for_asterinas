@@ -45,7 +45,8 @@ func needsSetupDev(config *configs.Config) bool {
 			return false
 		}
 	}
-	return true
+	// return true
+	return false
 }
 
 // prepareRootfs sets up the devices, mount points, and filesystems for use
@@ -135,13 +136,18 @@ func prepareRootfs(pipe io.ReadWriter, iConfig *initConfig, mountFds []int) (err
 		return err
 	}
 
-	if config.NoPivotRoot {
-		err = msMoveRoot(config.Rootfs)
-	} else if config.Namespaces.Contains(configs.NEWNS) {
-		err = pivotRoot(config.Rootfs)
-	} else {
-		err = chroot()
-	}
+	// if config.NoPivotRoot {
+	// 	fmt.Println("ms move root")
+	// 	err = msMoveRoot(config.Rootfs)
+	// } else if config.Namespaces.Contains(configs.NEWNS) {
+	// 	fmt.Println("pivot root")
+	// 	err = pivotRoot(config.Rootfs)
+	// } else {
+	// 	fmt.Printf("chroot")
+	// 	err = chroot()
+	// }
+	err = chroot()
+
 	if err != nil {
 		return fmt.Errorf("error jailing process inside rootfs: %w", err)
 	}
@@ -462,7 +468,10 @@ func mountToRootfs(m *configs.Mount, c *mountConfig) error {
 		// has been a "fun" attack scenario in the past.
 		// TODO: This won't be necessary once we switch to libpathrs and we can
 		//       stop all of these symlink-exchange attacks.
+		// fmt.Printf("rootfs: %s\n", rootfs)
+		// fmt.Printf("mount procfs and sysfs: %s\n", m.Device)
 		dest := filepath.Clean(m.Destination)
+		// fmt.Printf("dest = %s\n", dest)
 		if !strings.HasPrefix(dest, rootfs) {
 			// Do not use securejoin as it resolves symlinks.
 			dest = filepath.Join(rootfs, dest)
@@ -477,10 +486,13 @@ func mountToRootfs(m *configs.Mount, c *mountConfig) error {
 		if err := utils.MkdirAllInRoot(rootfs, dest, 0o755); err != nil {
 			return err
 		}
+
+		// fmt.Printf("mount prooagate\n")
 		// Selinux kernels do not support labeling of /proc or /sys.
 		return mountPropagate(m, rootfs, "", nil)
 	}
 
+	// fmt.Printf("create mount point, device = %s, label = %s\n", m.Device, c.label)
 	mountFd := c.fd
 	dest, err := createMountpoint(rootfs, m, mountFd, m.Source)
 	if err != nil {
@@ -488,12 +500,15 @@ func mountToRootfs(m *configs.Mount, c *mountConfig) error {
 	}
 	mountLabel := c.label
 
+	fmt.Printf("dest = %s\n", dest)
+
 	switch m.Device {
 	case "mqueue":
-		if err := mountPropagate(m, rootfs, "", nil); err != nil {
-			return err
-		}
-		return label.SetFileLabel(dest, mountLabel)
+		return nil
+		// if err := mountPropagate(m, rootfs, "", nil); err != nil {
+		// 	return err
+		// }
+		// return label.SetFileLabel(dest, mountLabel)
 	case "tmpfs":
 		if m.Extensions&configs.EXT_COPYUP == configs.EXT_COPYUP {
 			err = doTmpfsCopyUp(m, rootfs, mountLabel)
@@ -502,33 +517,37 @@ func mountToRootfs(m *configs.Mount, c *mountConfig) error {
 		}
 		return err
 	case "bind":
-		if err := mountPropagate(m, rootfs, mountLabel, mountFd); err != nil {
-			return err
-		}
-		// bind mount won't change mount options, we need remount to make mount options effective.
-		// first check that we have non-default options required before attempting a remount
-		if m.Flags&^(unix.MS_REC|unix.MS_REMOUNT|unix.MS_BIND) != 0 {
-			// only remount if unique mount options are set
-			if err := remount(m, rootfs, mountFd); err != nil {
-				return err
-			}
-		}
+		fmt.Printf("bind, device = %s, label = %s\n", m.Device, c.label)
+		return nil
+		// if err := mountPropagate(m, rootfs, mountLabel, mountFd); err != nil {
+		// 	return err
+		// }
+		// // bind mount won't change mount options, we need remount to make mount options effective.
+		// // first check that we have non-default options required before attempting a remount
+		// if m.Flags&^(unix.MS_REC|unix.MS_REMOUNT|unix.MS_BIND) != 0 {
+		// 	// only remount if unique mount options are set
+		// 	if err := remount(m, rootfs, mountFd); err != nil {
+		// 		return err
+		// 	}
+		// }
 
-		if m.Relabel != "" {
-			if err := label.Validate(m.Relabel); err != nil {
-				return err
-			}
-			shared := label.IsShared(m.Relabel)
-			if err := label.Relabel(m.Source, mountLabel, shared); err != nil {
-				return err
-			}
-		}
+		// if m.Relabel != "" {
+		// 	if err := label.Validate(m.Relabel); err != nil {
+		// 		return err
+		// 	}
+		// 	shared := label.IsShared(m.Relabel)
+		// 	if err := label.Relabel(m.Source, mountLabel, shared); err != nil {
+		// 		return err
+		// 	}
+		// }
 	case "cgroup":
 		if cgroups.IsCgroup2UnifiedMode() {
 			return mountCgroupV2(m, c)
 		}
 		return mountCgroupV1(m, c)
 	default:
+		fmt.Printf("mount label: %s\n", mountLabel)
+		// return nil
 		return mountPropagate(m, rootfs, mountLabel, mountFd)
 	}
 	if err := setRecAttr(m, rootfs); err != nil {

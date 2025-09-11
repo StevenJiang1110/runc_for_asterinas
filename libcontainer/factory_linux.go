@@ -207,17 +207,25 @@ func (l *LinuxFactory) Create(id string, config *configs.Config) (Container, err
 }
 
 func (l *LinuxFactory) Load(id string) (Container, error) {
+	fmt.Println("Linux factory load")
+	fmt.Printf("l.Root = %s, id = %s\n", l.Root, id)
 	if l.Root == "" {
 		return nil, errors.New("root not set")
 	}
+
+	fmt.Println("validate id")
 	// when load, we need to check id is valid or not.
 	if err := l.validateID(id); err != nil {
 		return nil, err
 	}
+
+	fmt.Println("secure join")
 	containerRoot, err := securejoin.SecureJoin(l.Root, id)
 	if err != nil {
 		return nil, err
 	}
+
+	fmt.Println("load state")
 	state, err := l.loadState(containerRoot)
 	if err != nil {
 		return nil, err
@@ -227,6 +235,8 @@ func (l *LinuxFactory) Load(id string) (Container, error) {
 		processStartTime: state.InitProcessStartTime,
 		fds:              state.ExternalDescriptors,
 	}
+
+	fmt.Println("new with paths")
 	cm, err := manager.NewWithPaths(state.Config.Cgroups, state.CgroupPaths)
 	if err != nil {
 		return nil, err
@@ -247,9 +257,12 @@ func (l *LinuxFactory) Load(id string) (Container, error) {
 		created:              state.Created,
 	}
 	c.state = &loadedState{c: c}
+	fmt.Println("refresh state")
 	if err := c.refreshState(); err != nil {
 		return nil, err
 	}
+
+	fmt.Println("Linux factory load returns success")
 	return c, nil
 }
 

@@ -90,6 +90,7 @@ func (p *setnsProcess) start() (retErr error) {
 		return fmt.Errorf("error starting setns process: %w", err)
 	}
 
+	fmt.Println("setnsProcess initWaiter")
 	waitInit := initWaiter(p.messageSockPair.parent)
 	defer func() {
 		if retErr != nil {
@@ -320,17 +321,25 @@ func (p *initProcess) externalDescriptors() []string {
 // getChildPid receives the final child's pid over the provided pipe.
 func (p *initProcess) getChildPid() (int, error) {
 	var pid pid
+
+	fmt.Println("RUNC: json new decoder")
 	if err := json.NewDecoder(p.messageSockPair.parent).Decode(&pid); err != nil {
+		fmt.Println("RUNC: json new decoder returns error, wait p.cmd")
 		_ = p.cmd.Wait()
+		fmt.Println("RUNC: json new decoder returns error, wait p.cmd returns")
 		return -1, err
 	}
 
 	// Clean up the zombie parent process
 	// On Unix systems FindProcess always succeeds.
+	fmt.Printf("RUNC: find process, pid = %d\n", pid.PidFirstChild)
 	firstChildProcess, _ := os.FindProcess(pid.PidFirstChild)
 
+	fmt.Println("RUNC: wait first child process")
 	// Ignore the error in case the child has already been reaped for any reason
 	_, _ = firstChildProcess.Wait()
+
+	fmt.Println("RUNC: wait first child process returns")
 
 	return pid.Pid, nil
 }
@@ -356,7 +365,9 @@ func (p *initProcess) waitForChildExit(childPid int) error {
 }
 
 func (p *initProcess) start() (retErr error) {
+	fmt.Println("RUNC: initProcess start")
 	defer p.messageSockPair.parent.Close() //nolint: errcheck
+	fmt.Printf("RUNC: initProcess cmd start%+v\n", p.cmd)
 	err := p.cmd.Start()
 	p.process.ops = p
 	// close the write-side of the pipes (controlled by child)
@@ -367,6 +378,7 @@ func (p *initProcess) start() (retErr error) {
 		return fmt.Errorf("unable to start init: %w", err)
 	}
 
+	fmt.Println("init process init Waiter")
 	waitInit := initWaiter(p.messageSockPair.parent)
 	defer func() {
 		if retErr != nil {
@@ -407,6 +419,8 @@ func (p *initProcess) start() (retErr error) {
 		}
 	}()
 
+	fmt.Println("RUNC: apply p.pid to p.manager")
+
 	// Do this before syncing with child so that no children can escape the
 	// cgroup. We don't need to worry about not doing this and not being root
 	// because we'd be using the rootless cgroup manager in that case.
@@ -418,15 +432,25 @@ func (p *initProcess) start() (retErr error) {
 			return fmt.Errorf("unable to apply Intel RDT configuration: %w", err)
 		}
 	}
+
+	fmt.Println("RUNC: copy bootstrap data to pipe")
+
 	if _, err := io.Copy(p.messageSockPair.parent, p.bootstrapData); err != nil {
 		return fmt.Errorf("can't copy bootstrap data to pipe: %w", err)
 	}
+
+	fmt.Println("RUNC: copy bootstrap data to pipe succeeds")
+
 	err = <-waitInit
 	if err != nil {
 		return err
 	}
 
+	fmt.Println("RUNC: get child pid")
+
 	childPid, err := p.getChildPid()
+
+	fmt.Printf("RUNC: childPid = %d\n", childPid)
 	if err != nil {
 		return fmt.Errorf("can't get final child's PID from pipe: %w", err)
 	}
@@ -440,10 +464,14 @@ func (p *initProcess) start() (retErr error) {
 	}
 	p.setExternalDescriptors(fds)
 
+	fmt.Println("RUNC: wait first child exit")
+
 	// Wait for our first child to exit
 	if err := p.waitForChildExit(childPid); err != nil {
 		return fmt.Errorf("error waiting for our first child to exit: %w", err)
 	}
+
+	fmt.Println("RUNC: create network interfaces")
 
 	if err := p.createNetworkInterfaces(); err != nil {
 		return fmt.Errorf("error creating network interfaces: %w", err)
@@ -451,6 +479,9 @@ func (p *initProcess) start() (retErr error) {
 	if err := p.updateSpecState(); err != nil {
 		return fmt.Errorf("error updating spec state: %w", err)
 	}
+
+	fmt.Println("RUNC: send config")
+
 	if err := p.sendConfig(); err != nil {
 		return fmt.Errorf("error sending config to init process: %w", err)
 	}
@@ -459,7 +490,10 @@ func (p *initProcess) start() (retErr error) {
 		sentResume bool
 	)
 
+	fmt.Println("RUNC: parse Sync")
+
 	ierr := parseSync(p.messageSockPair.parent, func(sync *syncT) error {
+		fmt.Printf("RUNC: inside parse sync closure: sync_type = %s\n", sync.Type)
 		switch sync.Type {
 		case procSeccomp:
 			if p.config.Config.Seccomp.ListenerPath == "" {
@@ -597,6 +631,8 @@ func (p *initProcess) start() (retErr error) {
 
 		return nil
 	})
+
+	fmt.Println("RUNC: sentRun")
 
 	if !sentRun {
 		return fmt.Errorf("error during container init: %w", ierr)
@@ -800,13 +836,16 @@ func (p *Process) InitializeIO(rootuid, rootgid int) (i *IO, err error) {
 // initWaiter returns a channel to wait on for making sure
 // runc init has finished the initial setup.
 func initWaiter(r io.Reader) chan error {
+	fmt.Println("process linux: init waiter")
 	ch := make(chan error, 1)
 	go func() {
 		defer close(ch)
 
 		inited := make([]byte, 1)
 		n, err := r.Read(inited)
+		fmt.Printf("init waiter: n = %d\n", n)
 		if err == nil {
+			fmt.Printf("init waiter: err is nil\n")
 			if n < 1 {
 				err = errors.New("short read")
 			} else if inited[0] != 0 {
@@ -816,6 +855,7 @@ func initWaiter(r io.Reader) chan error {
 				return
 			}
 		}
+		fmt.Printf("init waiter: err = %v\n", err)
 		ch <- fmt.Errorf("waiting for init preliminary setup: %w", err)
 	}()
 
