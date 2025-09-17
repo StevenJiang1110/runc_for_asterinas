@@ -68,6 +68,22 @@ const uint32_t C_ARCH_BAD = ARCH_BAD;
 #define SCMP_ARCH_RISCV64 ARCH_BAD
 #endif
 
+#ifndef SCMP_ARCH_LOONGARCH64
+#define SCMP_ARCH_LOONGARCH64 ARCH_BAD
+#endif
+
+#ifndef SCMP_ARCH_M68K
+#define SCMP_ARCH_M68K ARCH_BAD
+#endif
+
+#ifndef SCMP_ARCH_SH
+#define SCMP_ARCH_SH ARCH_BAD
+#endif
+
+#ifndef SCMP_ARCH_SHEB
+#define SCMP_ARCH_SHEB ARCH_BAD
+#endif
+
 const uint32_t C_ARCH_NATIVE       = SCMP_ARCH_NATIVE;
 const uint32_t C_ARCH_X86          = SCMP_ARCH_X86;
 const uint32_t C_ARCH_X86_64       = SCMP_ARCH_X86_64;
@@ -88,6 +104,10 @@ const uint32_t C_ARCH_S390X        = SCMP_ARCH_S390X;
 const uint32_t C_ARCH_PARISC       = SCMP_ARCH_PARISC;
 const uint32_t C_ARCH_PARISC64     = SCMP_ARCH_PARISC64;
 const uint32_t C_ARCH_RISCV64      = SCMP_ARCH_RISCV64;
+const uint32_t C_ARCH_LOONGARCH64  = SCMP_ARCH_LOONGARCH64;
+const uint32_t C_ARCH_M68K         = SCMP_ARCH_M68K;
+const uint32_t C_ARCH_SH           = SCMP_ARCH_SH;
+const uint32_t C_ARCH_SHEB         = SCMP_ARCH_SHEB;
 
 #ifndef SCMP_ACT_LOG
 #define SCMP_ACT_LOG 0x7ffc0000U
@@ -128,6 +148,11 @@ const uint32_t C_ACT_NOTIFY        = SCMP_ACT_NOTIFY;
 #define SCMP_FLTATR_API_SYSRAWRC _SCMP_FLTATR_MIN
 #endif
 
+// Added in libseccomp v2.6.0.
+#if SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 6
+#define SCMP_FLTATR_CTL_WAITKILL _SCMP_FLTATR_MIN
+#endif
+
 const uint32_t C_ATTRIBUTE_DEFAULT  = (uint32_t)SCMP_FLTATR_ACT_DEFAULT;
 const uint32_t C_ATTRIBUTE_BADARCH  = (uint32_t)SCMP_FLTATR_ACT_BADARCH;
 const uint32_t C_ATTRIBUTE_NNP      = (uint32_t)SCMP_FLTATR_CTL_NNP;
@@ -136,6 +161,7 @@ const uint32_t C_ATTRIBUTE_LOG      = (uint32_t)SCMP_FLTATR_CTL_LOG;
 const uint32_t C_ATTRIBUTE_SSB      = (uint32_t)SCMP_FLTATR_CTL_SSB;
 const uint32_t C_ATTRIBUTE_OPTIMIZE = (uint32_t)SCMP_FLTATR_CTL_OPTIMIZE;
 const uint32_t C_ATTRIBUTE_SYSRAWRC = (uint32_t)SCMP_FLTATR_API_SYSRAWRC;
+const uint32_t C_ATTRIBUTE_WAITKILL = (uint32_t)SCMP_FLTATR_CTL_WAITKILL;
 
 const int      C_CMP_NE            = (int)SCMP_CMP_NE;
 const int      C_CMP_LT            = (int)SCMP_CMP_LT;
@@ -145,11 +171,6 @@ const int      C_CMP_GE            = (int)SCMP_CMP_GE;
 const int      C_CMP_GT            = (int)SCMP_CMP_GT;
 const int      C_CMP_MASKED_EQ     = (int)SCMP_CMP_MASKED_EQ;
 
-const int      C_VERSION_MAJOR     = SCMP_VER_MAJOR;
-const int      C_VERSION_MINOR     = SCMP_VER_MINOR;
-const int      C_VERSION_MICRO     = SCMP_VER_MICRO;
-
-#if SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR >= 3
 unsigned int get_major_version()
 {
         return seccomp_version()->major;
@@ -164,22 +185,6 @@ unsigned int get_micro_version()
 {
         return seccomp_version()->micro;
 }
-#else
-unsigned int get_major_version()
-{
-        return (unsigned int)C_VERSION_MAJOR;
-}
-
-unsigned int get_minor_version()
-{
-        return (unsigned int)C_VERSION_MINOR;
-}
-
-unsigned int get_micro_version()
-{
-        return (unsigned int)C_VERSION_MICRO;
-}
-#endif
 
 // The libseccomp API level functions were added in v2.4.0
 #if SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 4
@@ -284,6 +289,7 @@ const (
 	filterAttrSSB
 	filterAttrOptimize
 	filterAttrRawRC
+	filterAttrWaitKill
 )
 
 const (
@@ -291,7 +297,7 @@ const (
 	scmpError C.int = -1
 	// Comparison boundaries to check for architecture validity
 	archStart ScmpArch = ArchNative
-	archEnd   ScmpArch = ArchRISCV64
+	archEnd   ScmpArch = ArchSHEB
 	// Comparison boundaries to check for action validity
 	actionStart ScmpAction = ActKillThread
 	actionEnd   ScmpAction = ActKillProcess
@@ -340,7 +346,7 @@ func ensureSupportedVersion() error {
 func getAPI() (uint, error) {
 	api := C.seccomp_api_get()
 	if api == 0 {
-		return 0, fmt.Errorf("API level operations are not supported")
+		return 0, errors.New("API level operations are not supported")
 	}
 
 	return uint(api), nil
@@ -349,11 +355,12 @@ func getAPI() (uint, error) {
 // Set the API level
 func setAPI(api uint) error {
 	if retCode := C.seccomp_api_set(C.uint(api)); retCode != 0 {
-		if errRc(retCode) == syscall.EOPNOTSUPP {
-			return fmt.Errorf("API level operations are not supported")
+		e := errRc(retCode)
+		if e == syscall.EOPNOTSUPP {
+			return errors.New("API level operations are not supported")
 		}
 
-		return fmt.Errorf("could not set API level: %v", retCode)
+		return fmt.Errorf("could not set API level: %w", e)
 	}
 
 	return nil
@@ -411,7 +418,7 @@ func (f *ScmpFilter) setFilterAttr(attr scmpFilterAttr, value C.uint32_t) error 
 // Wrapper for seccomp_rule_add_... functions
 func (f *ScmpFilter) addRuleWrapper(call ScmpSyscall, action ScmpAction, exact bool, length C.uint, cond C.scmp_cast_t) error {
 	if length != 0 && cond == nil {
-		return fmt.Errorf("null conditions list, but length is nonzero")
+		return errors.New("null conditions list, but length is nonzero")
 	}
 
 	var retCode C.int
@@ -430,7 +437,7 @@ func (f *ScmpFilter) addRuleWrapper(call ScmpSyscall, action ScmpAction, exact b
 		case syscall.EPERM, syscall.EACCES:
 			return errDefAction
 		case syscall.EINVAL:
-			return fmt.Errorf("two checks on same syscall argument")
+			return errors.New("two checks on same syscall argument")
 		default:
 			return e
 		}
@@ -455,7 +462,7 @@ func (f *ScmpFilter) addRuleGeneric(call ScmpSyscall, action ScmpAction, exact b
 	} else {
 		argsArr := C.make_arg_cmp_array(C.uint(len(conds)))
 		if argsArr == nil {
-			return fmt.Errorf("error allocating memory for conditions")
+			return errors.New("error allocating memory for conditions")
 		}
 		defer C.free(argsArr)
 
@@ -495,7 +502,7 @@ func sanitizeAction(in ScmpAction) error {
 	}
 
 	if inTmp != ActTrace && inTmp != ActErrno && (in&0xFFFF0000) != 0 {
-		return fmt.Errorf("highest 16 bits must be zeroed except for Trace and Errno")
+		return errors.New("highest 16 bits must be zeroed except for Trace and Errno")
 	}
 
 	return nil
@@ -551,6 +558,14 @@ func archFromNative(a C.uint32_t) (ScmpArch, error) {
 		return ArchPARISC64, nil
 	case C.C_ARCH_RISCV64:
 		return ArchRISCV64, nil
+	case C.C_ARCH_LOONGARCH64:
+		return ArchLOONGARCH64, nil
+	case C.C_ARCH_M68K:
+		return ArchM68K, nil
+	case C.C_ARCH_SH:
+		return ArchSH, nil
+	case C.C_ARCH_SHEB:
+		return ArchSHEB, nil
 	default:
 		return 0x0, fmt.Errorf("unrecognized architecture %#x", uint32(a))
 	}
@@ -597,6 +612,14 @@ func (a ScmpArch) toNative() C.uint32_t {
 		return C.C_ARCH_PARISC64
 	case ArchRISCV64:
 		return C.C_ARCH_RISCV64
+	case ArchLOONGARCH64:
+		return C.C_ARCH_LOONGARCH64
+	case ArchM68K:
+		return C.C_ARCH_M68K
+	case ArchSH:
+		return C.C_ARCH_SH
+	case ArchSHEB:
+		return C.C_ARCH_SHEB
 	case ArchNative:
 		return C.C_ARCH_NATIVE
 	default:
@@ -693,6 +716,8 @@ func (a scmpFilterAttr) toNative() uint32 {
 		return uint32(C.C_ATTRIBUTE_OPTIMIZE)
 	case filterAttrRawRC:
 		return uint32(C.C_ATTRIBUTE_SYSRAWRC)
+	case filterAttrWaitKill:
+		return uint32(C.C_ATTRIBUTE_WAITKILL)
 	default:
 		return 0x0
 	}
@@ -793,10 +818,7 @@ func notifReceive(fd ScmpFd) (*ScmpNotifReq, error) {
 	if retCode := C.seccomp_notify_alloc(&req, &resp); retCode != 0 {
 		return nil, errRc(retCode)
 	}
-
-	defer func() {
-		C.seccomp_notify_free(req, resp)
-	}()
+	defer C.seccomp_notify_free(req, resp)
 
 	for {
 		retCode, errno := C.seccomp_notify_receive(C.int(fd), req)
@@ -830,10 +852,7 @@ func notifRespond(fd ScmpFd, scmpResp *ScmpNotifResp) error {
 	if retCode := C.seccomp_notify_alloc(&req, &resp); retCode != 0 {
 		return errRc(retCode)
 	}
-
-	defer func() {
-		C.seccomp_notify_free(req, resp)
-	}()
+	defer C.seccomp_notify_free(req, resp)
 
 	scmpResp.toNative(resp)
 
