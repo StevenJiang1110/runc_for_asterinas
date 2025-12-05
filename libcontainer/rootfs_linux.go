@@ -482,7 +482,7 @@ func mountToRootfs(m *configs.Mount, c *mountConfig) error {
 	}
 
 	mountFd := c.fd
-	dest, err := createMountpoint(rootfs, m, mountFd, m.Source)
+	_, err := createMountpoint(rootfs, m, mountFd, m.Source)
 	if err != nil {
 		return fmt.Errorf("create mount destination for %s mount: %w", m.Destination, err)
 	}
@@ -490,10 +490,11 @@ func mountToRootfs(m *configs.Mount, c *mountConfig) error {
 
 	switch m.Device {
 	case "mqueue":
-		if err := mountPropagate(m, rootfs, "", nil); err != nil {
-			return err
-		}
-		return label.SetFileLabel(dest, mountLabel)
+		// if err := mountPropagate(m, rootfs, "", nil); err != nil {
+		// 	return err
+		// }
+		// return label.SetFileLabel(dest, mountLabel)
+		return nil
 	case "tmpfs":
 		if m.Extensions&configs.EXT_COPYUP == configs.EXT_COPYUP {
 			err = doTmpfsCopyUp(m, rootfs, mountLabel)
