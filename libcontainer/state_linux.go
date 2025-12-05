@@ -94,6 +94,8 @@ func (b *stoppedState) transition(s containerState) error {
 		return nil
 	case *stoppedState:
 		return nil
+	case *createdState:
+		return nil
 	}
 	return newStateTransitionError(b, s)
 }
