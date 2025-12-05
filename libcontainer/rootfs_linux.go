@@ -831,7 +831,7 @@ func rootfsParentMountPrivate(path string) error {
 }
 
 func prepareRoot(config *configs.Config) error {
-	flag := unix.MS_SLAVE | unix.MS_REC
+	flag := unix.MS_PRIVATE | unix.MS_REC
 	if config.RootPropagation != 0 {
 		flag = config.RootPropagation
 	}
@@ -916,7 +916,7 @@ func pivotRoot(rootfs string) error {
 	// known to cause issues due to races where we still have a reference to a
 	// mount while a process in the host namespace are trying to operate on
 	// something they think has no mounts (devicemapper in particular).
-	if err := mount("", ".", "", "", unix.MS_SLAVE|unix.MS_REC, ""); err != nil {
+	if err := mount("", ".", "", "", unix.MS_PRIVATE|unix.MS_REC, ""); err != nil {
 		return err
 	}
 	// Perform the unmount. MNT_DETACH allows us to unmount /proc/self/cwd.
@@ -965,7 +965,7 @@ func msMoveRoot(rootfs string) error {
 	for _, info := range mountinfos {
 		p := info.Mountpoint
 		// Be sure umount events are not propagated to the host.
-		if err := mount("", p, "", "", unix.MS_SLAVE|unix.MS_REC, ""); err != nil {
+		if err := mount("", p, "", "", unix.MS_PRIVATE|unix.MS_REC, ""); err != nil {
 			if errors.Is(err, unix.ENOENT) {
 				// If the mountpoint doesn't exist that means that we've
 				// already blasted away some parent directory of the mountpoint
